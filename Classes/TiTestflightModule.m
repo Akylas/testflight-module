@@ -9,6 +9,7 @@
 #import "TiHost.h"
 #import "TiUtils.h"
 #import "TestFlight.h"
+#import "TiApp.h"
 
 @implementation TiTestflightModule
 
@@ -33,9 +34,17 @@
 	// this method is called when the module is first loaded
 	// you *must* call the superclass
 	[super startup];
-
-    /*[TestFlight setOptions:[NSDictionary dictionaryWithObject:[NSNumber numberWithBool:NO] forKey:@"sendLogOnlyOnCrash"]];*/
-	NSLog(@"[INFO] %@ loaded",self);
+    NSDictionary* tiappProperties = [TiApp tiAppProperties];
+    if ([tiappProperties objectForKey:@"testflight.sendLogOnlyOnCrash"]) {
+        [TestFlight setOptions:[NSDictionary dictionaryWithObject:[tiappProperties objectForKey:@"testflight.sendLogOnlyOnCrash"] forKey:@"sendLogOnlyOnCrash"]];
+    }
+    NSString* token = [tiappProperties objectForKey:@"testflight.token"];
+    
+    if (token) {
+        DebugLog(@"[INFO] TestFlight takeOff %@", token);
+        [TestFlight takeOff:token];
+    }
+	DebugLog(@"[INFO] %@ loaded",self);
 }
 
 -(void)shutdown:(id)sender
@@ -67,17 +76,37 @@
 
 #pragma Public APIs
 
+-(id)getObjectProperty:(NSString*)key
+{
+    NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+    return [defaults objectForKey:key];
+}
+
+-(BOOL)getBoolProperty:(NSString*)key defaultValue:(BOOL)defaultValue
+{
+    id object = [self getObjectProperty:key];
+    if (object) {
+        return [object boolValue];
+    }
+    return defaultValue;
+}
+
+-(NSString*)getStringProperty:(NSString*)key defaultValue:(NSString*)defaultValue
+{
+    id object = [self getObjectProperty:key];
+    if (object) {
+        return [object stringValue];
+    }
+    return defaultValue;
+}
+
 -(void)takeOff:(id)args
 {
-//    ENSURE_UI_THREAD_1_ARG(args);
     ENSURE_UI_THREAD(takeOff, args);
-    ENSURE_ARG_COUNT(args, ([args count]>1?2:1));
-
-    //NSLog(@"[INFO] %@ takeOff",self);
-
-    NSString *value = [TiUtils stringValue:[args objectAtIndex:0]];
-
-    [TestFlight takeOff:value];
+    ENSURE_SINGLE_ARG_OR_NIL(args,NSString);
+    
+    DebugLog(@"[INFO] TestFlight takeOff %@", args);
+    [TestFlight takeOff:args];
 }
 
 -(void)passCheckpoint:(id)args
@@ -108,23 +137,26 @@
 -(void)log:(id)args
 {
     ENSURE_UI_THREAD(log, args);
-    ENSURE_ARG_COUNT(args, 2)
+    NSString* key = nil;
+    NSString *value = nil;
+    ENSURE_ARG_OR_NIL_AT_INDEX(key, args, 0, NSString);
+    ENSURE_ARG_OR_NIL_AT_INDEX(value, args, 1, NSString);
 
-    //NSLog(@"[INFO] %@ log",self);
-
-    NSString *key = [TiUtils stringValue:[args objectAtIndex:0]];
-    NSString *value = [TiUtils stringValue:[args objectAtIndex:1]];
-    TFLog(@"[%@] %@",key,value);
-
-    //NSLog(@"[%@] %@",key,value);
+    if (key) {
+        //we have one
+        if (value) {
+            //we have 2
+            TFLog(@"[%@] %@",key,value);
+        }
+        else {
+            TFLog(@"%@",key);
+        }
+    }
 }
 
 -(id)sdkVersion:(id)args
 {
-    //ENSURE_UI_THREAD_0_ARGS;
-
-    NSString *value = TESTFLIGHT_SDK_VERSION;
-    return value;
+    return TESTFLIGHT_SDK_VERSION;
 }
 
 /*- (id)setOptions:(id)args
